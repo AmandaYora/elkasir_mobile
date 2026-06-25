@@ -1,6 +1,6 @@
-// Hermetic widget test for the supervisor step-up approval dialog (the
-// supervisor-only flow): a supervisor approves, a non-supervisor is rejected,
-// and a bad credential shows an error. Uses a fake HTTP transport (no network).
+// Hermetic widget test for the supervisor approve-in-place PIN dialog:
+// a valid PIN returns the supervisor name and closes the dialog; a wrong PIN
+// shows an error and keeps it open. Uses a fake HTTP transport (no network).
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -20,22 +20,11 @@ http.Response _resp(Object body, int status) =>
       'content-type': 'application/json',
     });
 
-// A successful POST /auth/staff/login carrying a staff user of the given role.
-http.Response _staffLogin(String role, String name) => _resp({
+// A successful POST /pos/approvals/verify-pin returning the matched supervisor.
+http.Response _verifyOk(String name) => _resp({
   'success': true,
   'message': 'ok',
-  'data': {
-    'user': {
-      'id': 's1',
-      'name': name,
-      'role': role,
-      'storeId': 'st',
-      'actor': 'staff',
-    },
-    'accessToken': 'a',
-    'refreshToken': 'r',
-    'expiresIn': 900,
-  },
+  'data': {'approvedById': 's1', 'approvedByName': name},
 }, 200);
 
 class _Holder {
@@ -49,8 +38,7 @@ void main() {
   Future<_Holder> openAndApprove(
     WidgetTester tester,
     MockClient mock, {
-    required String user,
-    required String pass,
+    required String pin,
   }) async {
     final holder = _Holder();
     await tester.pumpWidget(
@@ -84,43 +72,50 @@ void main() {
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).at(0), user);
-    await tester.enterText(find.byType(TextField).at(1), pass);
+    await tester.enterText(find.byType(TextField).first, pin);
     await tester.tap(find.text('Setujui'));
     await tester.pumpAndSettle();
     return holder;
   }
 
-  testWidgets('supervisor credential is approved and returns the name', (
+  testWidgets('valid PIN is approved and returns the supervisor name', (
     tester,
   ) async {
-    final mock = MockClient((_) async => _staffLogin('supervisor', 'Siti'));
-    final h = await openAndApprove(tester, mock, user: 'siti', pass: 'super123');
+    final mock = MockClient((_) async => _verifyOk('Siti'));
+    final h = await openAndApprove(tester, mock, pin: '4321');
     expect(h.result, 'Siti', reason: 'approval returns the supervisor name');
     expect(find.byType(AlertDialog), findsNothing, reason: 'dialog closes');
   });
 
-  testWidgets('non-supervisor staff is rejected', (tester) async {
-    final mock = MockClient((_) async => _staffLogin('cashier', 'Budi'));
-    final h = await openAndApprove(tester, mock, user: 'budi', pass: 'kasir123');
-    expect(h.result, isNull, reason: 'cashier cannot approve');
-    expect(find.text('Akun ini bukan supervisor.'), findsOneWidget);
-    expect(find.byType(AlertDialog), findsOneWidget, reason: 'dialog stays open');
-  });
-
-  testWidgets('invalid credential shows an error', (tester) async {
+  testWidgets('wrong PIN shows an error and keeps the dialog open', (
+    tester,
+  ) async {
     final mock = MockClient(
       (_) async => _resp({
         'success': false,
-        'message': 'Username atau password salah',
+        'message': 'PIN supervisor tidak valid.',
         'errors': [
           {'code': 'unauthorized'},
         ],
       }, 401),
     );
-    final h = await openAndApprove(tester, mock, user: 'x', pass: 'y');
+    final h = await openAndApprove(tester, mock, pin: '0000');
+    expect(h.result, isNull, reason: 'invalid PIN does not approve');
+    expect(find.text('PIN supervisor salah.'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsOneWidget, reason: 'dialog stays open');
+  });
+
+  testWidgets('a too-short PIN is rejected client-side without a call', (
+    tester,
+  ) async {
+    var called = false;
+    final mock = MockClient((_) async {
+      called = true;
+      return _verifyOk('Siti');
+    });
+    final h = await openAndApprove(tester, mock, pin: '12');
+    expect(called, isFalse, reason: 'no API call for a < 4 digit PIN');
     expect(h.result, isNull);
-    expect(find.text('Kredensial tidak valid.'), findsOneWidget);
     expect(find.byType(AlertDialog), findsOneWidget);
   });
 }

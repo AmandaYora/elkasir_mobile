@@ -681,7 +681,9 @@ class _OrderContextPanel extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: OrderType.values.map((type) {
+          // Backend hanya mendukung dineIn/takeaway (ENUM DB) — jangan tawarkan pickup/delivery
+          // yang akan hilang saat disimpan.
+          children: const [OrderType.dineIn, OrderType.takeaway].map((type) {
             final selected = selectedOrderType == type;
             return ChoiceChip(
               selected: selected,
@@ -738,11 +740,9 @@ class _OrderContextPanel extends StatelessWidget {
           TextFormField(
             initialValue: customerName,
             onChanged: onCustomerNameChanged,
-            decoration: InputDecoration(
-              labelText: selectedOrderType == OrderType.delivery
-                  ? 'Ref antar / pelanggan'
-                  : 'Nama pelanggan (opsional)',
-              prefixIcon: const Icon(Icons.person_outline_rounded),
+            decoration: const InputDecoration(
+              labelText: 'Nama pelanggan (opsional)',
+              prefixIcon: Icon(Icons.person_outline_rounded),
             ),
           ),
       ],

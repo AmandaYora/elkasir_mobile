@@ -36,6 +36,10 @@ class SelfOrdersApi {
       total: (j['total'] as num?)?.toInt() ?? 0,
       createdAt: _date(j['createdAt']),
       status: _status(j['status']),
+      paymentMethod:
+          (j['paymentMethod'] == 'cash') ? PaymentMethod.cash : PaymentMethod.qris,
+      paymentStatus: (j['paymentStatus'] ?? 'paid') as String,
+      claimCode: (j['claimCode'] ?? '') as String,
     );
   }
 
@@ -53,5 +57,22 @@ class SelfOrdersApi {
     };
     final data = await _client.patch('/self-orders/$id/status', body: {'status': s});
     return _map(data as Map<String, dynamic>);
+  }
+
+  /// Cari pesanan bayar-di-kasir berdasar kode tebus (tanpa menyelesaikan pembayaran).
+  Future<SelfOrder> redeem(String claimCode) async {
+    final data = await _client.get('/self-orders/redeem/${Uri.encodeComponent(claimCode)}');
+    return _map(data as Map<String, dynamic>);
+  }
+
+  /// Tebus + terima pembayaran tunai (idempoten via state pesanan). Mengembalikan
+  /// pesanan yang sudah lunas.
+  Future<SelfOrder> redeemCheckout(String claimCode) async {
+    final data = await _client.post(
+      '/self-orders/redeem/${Uri.encodeComponent(claimCode)}/checkout',
+      headers: {'Idempotency-Key': 'redeem-$claimCode'},
+    );
+    final order = (data as Map<String, dynamic>)['order'] as Map<String, dynamic>?;
+    return _map(order ?? data);
   }
 }

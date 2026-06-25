@@ -21,5 +21,4 @@ const storeProfile = StoreProfile(
   address: String.fromEnvironment('STORE_ADDRESS', defaultValue: ''),
   phone: String.fromEnvironment('STORE_PHONE', defaultValue: ''),
   businessType: BusinessType.genericFnb,
-  features: BusinessFeatureFlags(),
 );

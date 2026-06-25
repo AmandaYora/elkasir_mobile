@@ -58,6 +58,7 @@ class PosAppState {
     this.maxDiscountPercent = 10,
     this.maxOperationalExpense = 200000,
     this.cashVarianceTolerance = 5000,
+    this.restoring = false,
   });
 
   factory PosAppState.initial() {
@@ -125,6 +126,7 @@ class PosAppState {
   final int maxDiscountPercent; // ambang diskon butuh persetujuan (% subtotal)
   final int maxOperationalExpense; // ambang biaya butuh persetujuan (Rp)
   final int cashVarianceTolerance; // toleransi selisih kas tutup shift (Rp)
+  final bool restoring; // true saat memulihkan sesi tersimpan di cold start (tampilkan splash)
 
   bool get hasOpenShift => currentShift?.status == ShiftStatus.open;
 
@@ -236,6 +238,7 @@ class PosAppState {
     int? maxDiscountPercent,
     int? maxOperationalExpense,
     int? cashVarianceTolerance,
+    bool? restoring,
   }) {
     return PosAppState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -280,6 +283,7 @@ class PosAppState {
       maxDiscountPercent: maxDiscountPercent ?? this.maxDiscountPercent,
       maxOperationalExpense: maxOperationalExpense ?? this.maxOperationalExpense,
       cashVarianceTolerance: cashVarianceTolerance ?? this.cashVarianceTolerance,
+      restoring: restoring ?? this.restoring,
     );
   }
 }
@@ -294,7 +298,35 @@ class AppController extends Notifier<PosAppState> {
   PosAppState build() {
     _hydratePrinter();
     _hydrateConfig();
-    return PosAppState.initial();
+    _restoreSession();
+    return PosAppState.initial().copyWith(restoring: true);
+  }
+
+  // ── Session restore (cold start) ──────────────────────────────────────────
+
+  /// Pulihkan sesi dari token tersimpan saat app dibuka, agar kasir tidak perlu login
+  /// ulang tiap kali. Token kedaluwarsa/invalid → jatuh ke layar login. Splash ditahan
+  /// lewat flag [PosAppState.restoring] sampai upaya ini selesai.
+  Future<void> _restoreSession() async {
+    try {
+      await ref.read(tokenStoreProvider).load();
+      final session = await ref.read(authApiProvider).me();
+      if (session != null && session.actor == 'staff') {
+        final role = session.role == 'supervisor'
+            ? StaffRole.supervisor
+            : StaffRole.cashier;
+        state = state.copyWith(
+          isAuthenticated: true,
+          cashierName: session.name,
+          cashierRole: role,
+        );
+        await _loadSession();
+      }
+    } catch (_) {
+      // token tidak valid / gagal → biarkan ke layar login
+    } finally {
+      state = state.copyWith(restoring: false);
+    }
   }
 
   // ── Config (server-driven feature flags + pricing + thresholds) ───────────
@@ -788,6 +820,27 @@ class AppController extends Notifier<PosAppState> {
       return e.message;
     } catch (_) {
       return 'Gagal menyelesaikan pesanan. Coba lagi.';
+    }
+  }
+
+  /// Tebus pesanan bayar-di-kasir lewat kode klaim: terima tunai → server menandai lunas
+  /// & mencatat transaksi. Lalu muat ulang inbox + data shift. Mengembalikan pesan error / null.
+  Future<String?> redeemSelfOrder(String claimCode) async {
+    if (claimCode.trim().isEmpty) {
+      return 'Masukkan kode tebus.';
+    }
+    if (!state.hasOpenShift) {
+      return 'Buka shift dulu untuk menerima pembayaran.';
+    }
+    try {
+      await ref.read(selfOrdersApiProvider).redeemCheckout(claimCode.trim());
+      // Server kini menandai pesanan lunas + mencatat penjualan tunai ke shift berjalan.
+      await _loadShiftData();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Gagal menerima pembayaran. Coba lagi.';
     }
   }
 

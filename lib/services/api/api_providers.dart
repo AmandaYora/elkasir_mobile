@@ -5,7 +5,6 @@ import 'api_client.dart';
 import 'auth_api.dart';
 import 'cash_movements_api.dart';
 import 'config_api.dart';
-import 'pricing_api.dart';
 import 'products_api.dart';
 import 'self_orders_api.dart';
 import 'shifts_api.dart';
@@ -43,10 +42,6 @@ final shiftsApiProvider = Provider<ShiftsApi>(
 
 final transactionsApiProvider = Provider<TransactionsApi>(
   (ref) => TransactionsApi(ref.read(apiClientProvider)),
-);
-
-final pricingApiProvider = Provider<PricingApi>(
-  (ref) => PricingApi(ref.read(apiClientProvider)),
 );
 
 final configApiProvider = Provider<ConfigApi>(

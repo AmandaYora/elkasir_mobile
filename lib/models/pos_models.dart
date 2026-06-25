@@ -21,20 +21,6 @@ enum PaymentMethod { cash, qris }
 
 enum StaffRole { cashier, supervisor }
 
-class CashierAccount {
-  const CashierAccount({
-    required this.name,
-    required this.email,
-    required this.password,
-    this.role = StaffRole.cashier,
-  });
-
-  final String name;
-  final String email;
-  final String password;
-  final StaffRole role;
-}
-
 extension StaffRoleLabel on StaffRole {
   String get label {
     switch (this) {
@@ -209,7 +195,6 @@ class StoreProfile {
     required this.address,
     required this.phone,
     required this.businessType,
-    required this.features,
   });
 
   final String name;
@@ -217,23 +202,6 @@ class StoreProfile {
   final String address;
   final String phone;
   final BusinessType businessType;
-  final BusinessFeatureFlags features;
-}
-
-class BusinessFeatureFlags {
-  const BusinessFeatureFlags({
-    this.quickSale = true,
-    this.tableService = true,
-    this.modifiers = true,
-    this.serviceCharge = true,
-    this.deliveryOrders = true,
-  });
-
-  final bool quickSale;
-  final bool tableService;
-  final bool modifiers;
-  final bool serviceCharge;
-  final bool deliveryOrders;
 }
 
 class DiningTable {
@@ -374,6 +342,9 @@ class SelfOrder {
     required this.total,
     required this.createdAt,
     this.status = SelfOrderStatus.placed,
+    this.paymentMethod = PaymentMethod.qris,
+    this.paymentStatus = 'paid',
+    this.claimCode = '',
   });
 
   final String id;
@@ -382,8 +353,17 @@ class SelfOrder {
   final int total;
   final DateTime createdAt;
   final SelfOrderStatus status;
+  final PaymentMethod paymentMethod; // cash (bayar di kasir) | qris
+  final String paymentStatus; // pending | paid | unpaid | expired | failed
+  final String claimCode; // kode tebus (barcode) untuk pesanan bayar-di-kasir
 
-  SelfOrder copyWith({SelfOrderStatus? status}) {
+  /// Pesanan bayar-di-kasir yang belum lunas → kasir harus menebus & menerima tunai dulu.
+  bool get awaitingCashPayment =>
+      paymentMethod == PaymentMethod.cash && paymentStatus != 'paid';
+
+  bool get isPaid => paymentStatus == 'paid';
+
+  SelfOrder copyWith({SelfOrderStatus? status, String? paymentStatus}) {
     return SelfOrder(
       id: id,
       tableName: tableName,
@@ -391,6 +371,9 @@ class SelfOrder {
       total: total,
       createdAt: createdAt,
       status: status ?? this.status,
+      paymentMethod: paymentMethod,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      claimCode: claimCode,
     );
   }
 }
