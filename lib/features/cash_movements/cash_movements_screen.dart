@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../models/pos_models.dart';
@@ -168,7 +167,7 @@ class CashMovementsScreen extends ConsumerWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                          'Di atas ${formatIDR(maxOperationalExpenseWithoutApproval)} '
+                          'Di atas ${formatIDR(ref.read(appControllerProvider).maxOperationalExpense)} '
                           'butuh persetujuan supervisor.',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.mutedForeground,
@@ -197,24 +196,33 @@ class CashMovementsScreen extends ConsumerWidget {
                 FilledButton(
                   onPressed: canSave
                       ? () async {
+                          final appState = ref.read(appControllerProvider);
                           final controller = ref.read(
                             appControllerProvider.notifier,
                           );
+                          final plafon = appState.maxOperationalExpense;
                           var approvedBy = '';
                           if (type == CashMovementType.operationalExpense &&
-                              amount > maxOperationalExpenseWithoutApproval) {
-                            final approver = await showSupervisorApprovalDialog(
-                              context,
-                              title: 'Persetujuan Supervisor',
-                              message:
-                                  'Biaya operasional ${formatIDR(amount)} melebihi '
-                                  'plafon ${formatIDR(maxOperationalExpenseWithoutApproval)}. '
-                                  'Diperlukan persetujuan supervisor untuk melanjutkan.',
-                            );
-                            if (approver == null) {
-                              return;
+                              amount > plafon) {
+                            // Layar ini supervisor-only → supervisor menyetujui otomatis;
+                            // PIN hanya diperlukan bila (mis.) admin membuka via konteks lain.
+                            if (appState.isSupervisor) {
+                              approvedBy = appState.cashierName;
+                            } else {
+                              final approver =
+                                  await showSupervisorApprovalDialog(
+                                context,
+                                title: 'Persetujuan Supervisor',
+                                message:
+                                    'Biaya operasional ${formatIDR(amount)} melebihi '
+                                    'plafon ${formatIDR(plafon)}. '
+                                    'Diperlukan PIN supervisor untuk melanjutkan.',
+                              );
+                              if (approver == null) {
+                                return;
+                              }
+                              approvedBy = approver;
                             }
-                            approvedBy = approver;
                           }
                           final error = await controller.addCashMovement(
                             type: type,

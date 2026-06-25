@@ -28,8 +28,28 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver {
   bool _sidebarExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    // Refresh flag fitur saat app kembali ke depan (soft-poll, bukan stream — anti flag basi).
+    if (lifecycle == AppLifecycleState.resumed) {
+      ref.read(appControllerProvider.notifier).refreshConfig();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +67,8 @@ class _AppShellState extends ConsumerState<AppShell> {
             expanded: _sidebarExpanded,
             store: state.store,
             newOrders: state.newSelfOrderCount,
+            isSupervisor: state.isSupervisor,
+            showSelfOrder: state.featureSelfOrder,
             onSelect: controller.navigate,
             onToggleExpanded: () =>
                 setState(() => _sidebarExpanded = !_sidebarExpanded),
@@ -136,6 +158,8 @@ class _Sidebar extends StatelessWidget {
     required this.expanded,
     required this.store,
     required this.newOrders,
+    required this.isSupervisor,
+    required this.showSelfOrder,
     required this.onSelect,
     required this.onToggleExpanded,
   });
@@ -145,6 +169,8 @@ class _Sidebar extends StatelessWidget {
   final bool expanded;
   final StoreProfile store;
   final int newOrders;
+  final bool isSupervisor; // kasir hanya melihat fitur kasir; sisanya supervisor-only
+  final bool showSelfOrder; // sembunyikan "Pesanan Masuk" bila self-order dimatikan admin
   final ValueChanged<AppScreen> onSelect;
   final VoidCallback onToggleExpanded;
 
@@ -255,15 +281,16 @@ class _Sidebar extends StatelessWidget {
                       expanded: expanded,
                       onTap: () => onSelect(AppScreen.transactions),
                     ),
-                    _NavItem(
-                      key: const ValueKey('nav-incoming'),
-                      icon: Icons.notifications_active_rounded,
-                      label: 'Pesanan Masuk',
-                      selected: selected == AppScreen.incomingOrders,
-                      expanded: expanded,
-                      badgeCount: newOrders,
-                      onTap: () => onSelect(AppScreen.incomingOrders),
-                    ),
+                    if (showSelfOrder)
+                      _NavItem(
+                        key: const ValueKey('nav-incoming'),
+                        icon: Icons.notifications_active_rounded,
+                        label: 'Pesanan Masuk',
+                        selected: selected == AppScreen.incomingOrders,
+                        expanded: expanded,
+                        badgeCount: newOrders,
+                        onTap: () => onSelect(AppScreen.incomingOrders),
+                      ),
                   ],
                 ),
                 _NavGroup(
@@ -278,22 +305,25 @@ class _Sidebar extends StatelessWidget {
                       expanded: expanded,
                       onTap: () => onSelect(AppScreen.shiftSummary),
                     ),
-                    _NavItem(
-                      key: const ValueKey('nav-cash-movements'),
-                      icon: Icons.account_balance_wallet_rounded,
-                      label: 'Mutasi Kas',
-                      selected: selected == AppScreen.cashMovements,
-                      expanded: expanded,
-                      onTap: () => onSelect(AppScreen.cashMovements),
-                    ),
-                    _NavItem(
-                      key: const ValueKey('nav-printer-settings'),
-                      icon: Icons.print_rounded,
-                      label: 'Pengaturan Struk',
-                      selected: selected == AppScreen.printerSettings,
-                      expanded: expanded,
-                      onTap: () => onSelect(AppScreen.printerSettings),
-                    ),
+                    // Mutasi kas & pengaturan perangkat = supervisor-only (disembunyikan dari kasir).
+                    if (isSupervisor)
+                      _NavItem(
+                        key: const ValueKey('nav-cash-movements'),
+                        icon: Icons.account_balance_wallet_rounded,
+                        label: 'Mutasi Kas',
+                        selected: selected == AppScreen.cashMovements,
+                        expanded: expanded,
+                        onTap: () => onSelect(AppScreen.cashMovements),
+                      ),
+                    if (isSupervisor)
+                      _NavItem(
+                        key: const ValueKey('nav-printer-settings'),
+                        icon: Icons.print_rounded,
+                        label: 'Pengaturan Struk',
+                        selected: selected == AppScreen.printerSettings,
+                        expanded: expanded,
+                        onTap: () => onSelect(AppScreen.printerSettings),
+                      ),
                   ],
                 ),
                 _NavGroup(

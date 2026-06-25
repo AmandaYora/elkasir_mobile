@@ -130,8 +130,10 @@ class PosScreen extends ConsumerWidget {
     int discount,
     int subtotal,
   ) async {
+    final state = ref.read(appControllerProvider);
+    final pct = state.maxDiscountPercent;
     final discountController = TextEditingController(text: discount.toString());
-    final cap = (subtotal * maxDiscountPercentWithoutApproval / 100).floor();
+    final cap = (subtotal * pct / 100).floor();
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -152,7 +154,7 @@ class PosScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Diskon di atas $maxDiscountPercentWithoutApproval% '
+                'Diskon di atas $pct% '
                 '(${formatIDR(cap)}) butuh persetujuan supervisor.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.mutedForeground,
@@ -170,22 +172,31 @@ class PosScreen extends ConsumerWidget {
                 final value = int.tryParse(discountController.text) ?? 0;
                 final controller = ref.read(appControllerProvider.notifier);
                 if (value > cap) {
-                  final approver = await showSupervisorApprovalDialog(
-                    context,
-                    title: 'Persetujuan Supervisor',
-                    message:
-                        'Diskon ${formatIDR(value)} melebihi plafon '
-                        '${formatIDR(cap)} ($maxDiscountPercentWithoutApproval%). '
-                        'Diperlukan persetujuan supervisor.',
-                  );
-                  if (approver == null) {
-                    return;
+                  // Supervisor yang login menyetujui otomatis; kasir butuh PIN supervisor.
+                  if (state.isSupervisor) {
+                    controller.setDiscount(
+                      value,
+                      supervisorApproved: true,
+                      approvedBy: state.cashierName,
+                    );
+                  } else {
+                    final approver = await showSupervisorApprovalDialog(
+                      context,
+                      title: 'Persetujuan Supervisor',
+                      message:
+                          'Diskon ${formatIDR(value)} melebihi plafon '
+                          '${formatIDR(cap)} ($pct%). '
+                          'Diperlukan PIN supervisor.',
+                    );
+                    if (approver == null) {
+                      return;
+                    }
+                    controller.setDiscount(
+                      value,
+                      supervisorApproved: true,
+                      approvedBy: approver,
+                    );
                   }
-                  controller.setDiscount(
-                    value,
-                    supervisorApproved: true,
-                    approvedBy: approver,
-                  );
                 } else {
                   controller.setDiscount(value);
                 }

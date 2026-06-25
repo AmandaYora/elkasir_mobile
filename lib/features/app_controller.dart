@@ -11,7 +11,9 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../services/api/api_exception.dart';
 import '../services/api/api_providers.dart';
+import '../services/api/config_api.dart';
 import '../services/api/transactions_api.dart';
+import '../services/config_store.dart';
 import '../services/printer_service.dart';
 import '../services/printer_settings_store.dart';
 import '../services/thermal_printer_service.dart';
@@ -51,6 +53,11 @@ class PosAppState {
     this.servicePercent = 2,
     this.taxPercent = 11,
     this.taxEnabled = false,
+    this.featureQris = true,
+    this.featureSelfOrder = true,
+    this.maxDiscountPercent = 10,
+    this.maxOperationalExpense = 200000,
+    this.cashVarianceTolerance = 5000,
   });
 
   factory PosAppState.initial() {
@@ -110,11 +117,19 @@ class PosAppState {
   final AppScreen screen;
   final String transactionSearch;
   final String transactionStatusFilter;
-  final int servicePercent; // biaya layanan % (dari server /pos/pricing)
+  final int servicePercent; // biaya layanan % (dari server /pos/config)
   final int taxPercent; // PPN %
   final bool taxEnabled; // PPN aktif?
+  final bool featureQris; // metode QRIS aktif? (hide tombol QRIS bila false)
+  final bool featureSelfOrder; // self-order aktif? (hide tab "Pesanan Masuk" bila false)
+  final int maxDiscountPercent; // ambang diskon butuh persetujuan (% subtotal)
+  final int maxOperationalExpense; // ambang biaya butuh persetujuan (Rp)
+  final int cashVarianceTolerance; // toleransi selisih kas tutup shift (Rp)
 
   bool get hasOpenShift => currentShift?.status == ShiftStatus.open;
+
+  /// Supervisor melihat fitur penuh; kasir hanya fitur kasir (sisanya disembunyikan).
+  bool get isSupervisor => cashierRole == StaffRole.supervisor;
 
   int get newSelfOrderCount =>
       incomingOrders.where((o) => o.status == SelfOrderStatus.placed).length;
@@ -216,6 +231,11 @@ class PosAppState {
     int? servicePercent,
     int? taxPercent,
     bool? taxEnabled,
+    bool? featureQris,
+    bool? featureSelfOrder,
+    int? maxDiscountPercent,
+    int? maxOperationalExpense,
+    int? cashVarianceTolerance,
   }) {
     return PosAppState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -255,6 +275,11 @@ class PosAppState {
       servicePercent: servicePercent ?? this.servicePercent,
       taxPercent: taxPercent ?? this.taxPercent,
       taxEnabled: taxEnabled ?? this.taxEnabled,
+      featureQris: featureQris ?? this.featureQris,
+      featureSelfOrder: featureSelfOrder ?? this.featureSelfOrder,
+      maxDiscountPercent: maxDiscountPercent ?? this.maxDiscountPercent,
+      maxOperationalExpense: maxOperationalExpense ?? this.maxOperationalExpense,
+      cashVarianceTolerance: cashVarianceTolerance ?? this.cashVarianceTolerance,
     );
   }
 }
@@ -263,11 +288,55 @@ class AppController extends Notifier<PosAppState> {
   final _printerService = PrinterService();
   final _thermal = ThermalPrinterService();
   final _printerSettings = PrinterSettingsStore();
+  final _configStore = ConfigStore();
 
   @override
   PosAppState build() {
     _hydratePrinter();
+    _hydrateConfig();
     return PosAppState.initial();
+  }
+
+  // ── Config (server-driven feature flags + pricing + thresholds) ───────────
+
+  /// Terapkan PosConfig server ke state (harga, fitur, ambang persetujuan).
+  PosAppState _withConfig(PosAppState s, PosConfig c) {
+    var next = s.copyWith(
+      servicePercent: c.servicePercent,
+      taxPercent: c.taxPercent,
+      taxEnabled: c.taxEnabled,
+      featureQris: c.featureQris,
+      featureSelfOrder: c.featureSelfOrder,
+      maxDiscountPercent: c.maxDiscountPercent,
+      maxOperationalExpense: c.maxOperationalExpense,
+      cashVarianceTolerance: c.cashVarianceTolerance,
+    );
+    // Bila QRIS dimatikan saat metode itu terpilih, jatuhkan ke tunai (hindari state mustahil).
+    if (!next.featureQris &&
+        next.selectedPaymentMethod == PaymentMethod.qris) {
+      next = next.copyWith(
+        selectedPaymentMethod: PaymentMethod.cash,
+        amountReceived: 0,
+      );
+    }
+    return next;
+  }
+
+  /// Muat konfigurasi tersimpan (last-known-good) saat start agar flag akurat lebih awal.
+  Future<void> _hydrateConfig() async {
+    final cached = await _configStore.load();
+    if (cached != null) state = _withConfig(state, cached);
+  }
+
+  /// Refresh konfigurasi dari server (dipanggil saat app kembali ke foreground). Fail-open:
+  /// bila gagal, pertahankan nilai terakhir (cache / in-code default) — kasir tak terblokir.
+  Future<void> refreshConfig() async {
+    if (!state.isAuthenticated) return;
+    try {
+      final cfg = await ref.read(configApiProvider).get();
+      await _configStore.save(cfg);
+      state = _withConfig(state, cfg);
+    } catch (_) {}
   }
 
   // ── Auth ────────────────────────────────────────────────────────────────
@@ -320,9 +389,7 @@ class AppController extends Notifier<PosAppState> {
     List<Product> products = const [];
     List<DiningTable> tables = const [];
     Shift? shift;
-    int servicePercent = state.servicePercent;
-    int taxPercent = state.taxPercent;
-    bool taxEnabled = state.taxEnabled;
+    PosConfig? cfg;
     try {
       products = await ref.read(productsApiProvider).list();
     } catch (_) {}
@@ -333,21 +400,19 @@ class AppController extends Notifier<PosAppState> {
       shift = await ref.read(shiftsApiProvider).current(name);
     } catch (_) {}
     try {
-      // Konfigurasi harga (layanan % + PPN) agar total POS konsisten dengan server.
-      final p = await ref.read(pricingApiProvider).get();
-      servicePercent = p.servicePercent;
-      taxPercent = p.taxPercent;
-      taxEnabled = p.taxEnabled;
+      // Satu payload konfigurasi POS (harga + fitur + ambang); simpan last-known-good.
+      cfg = await ref.read(configApiProvider).get();
+      await _configStore.save(cfg);
     } catch (_) {}
     state = state.copyWith(
       products: products,
       tables: tables,
       currentShift: shift,
       tableLabel: tables.isNotEmpty ? tables.first.name : '',
-      servicePercent: servicePercent,
-      taxPercent: taxPercent,
-      taxEnabled: taxEnabled,
     );
+    if (cfg != null) {
+      state = _withConfig(state, cfg);
+    }
     if (shift != null) {
       await _loadShiftData();
     }
@@ -365,9 +430,12 @@ class AppController extends Notifier<PosAppState> {
         tableName: (id) => tablesById[id] ?? '',
       );
     } catch (_) {}
-    try {
-      movements = await ref.read(cashMovementsApiProvider).list(name);
-    } catch (_) {}
+    // Mutasi kas = supervisor-only di server; kasir tak perlu (dan akan ditolak 403).
+    if (state.isSupervisor) {
+      try {
+        movements = await ref.read(cashMovementsApiProvider).list(name);
+      } catch (_) {}
+    }
     try {
       incoming = await ref.read(selfOrdersApiProvider).list();
     } catch (_) {}
@@ -458,6 +526,16 @@ class AppController extends Notifier<PosAppState> {
     if (screen == AppScreen.pos && !state.hasOpenShift) {
       return;
     }
+    // Layar supervisor-only tak dapat diakses kasir (sejalan dgn penegakan server).
+    if (!state.isSupervisor &&
+        (screen == AppScreen.cashMovements ||
+            screen == AppScreen.printerSettings)) {
+      return;
+    }
+    // Pesanan masuk hilang bila self-order dimatikan admin.
+    if (!state.featureSelfOrder && screen == AppScreen.incomingOrders) {
+      return;
+    }
     state = state.copyWith(screen: screen);
   }
 
@@ -528,7 +606,7 @@ class AppController extends Notifier<PosAppState> {
     );
   }
 
-  /// Apply a discount. Above [maxDiscountPercentWithoutApproval]% of subtotal it
+  /// Apply a discount. Above the store's max-discount percent (from /pos/config) it
   /// is only honoured with [supervisorApproved]; otherwise it is clamped.
   void setDiscount(
     int value, {
@@ -537,7 +615,7 @@ class AppController extends Notifier<PosAppState> {
   }) {
     final subtotal = state.subtotal;
     var amount = math.max(0, math.min(value, subtotal));
-    final cap = (subtotal * maxDiscountPercentWithoutApproval / 100).floor();
+    final cap = (subtotal * state.maxDiscountPercent / 100).floor();
     if (!supervisorApproved && amount > cap) {
       amount = cap;
     }
@@ -548,7 +626,7 @@ class AppController extends Notifier<PosAppState> {
   }
 
   int get discountCap =>
-      (state.subtotal * maxDiscountPercentWithoutApproval / 100).floor();
+      (state.subtotal * state.maxDiscountPercent / 100).floor();
 
   void setPaymentMethod(PaymentMethod method) {
     state = state.copyWith(

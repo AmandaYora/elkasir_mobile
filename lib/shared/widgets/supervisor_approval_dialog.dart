@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../services/api/api_exception.dart';
 import '../../services/api/api_providers.dart';
 
-/// Dialog persetujuan supervisor (step-up authorization).
+/// Dialog persetujuan supervisor (approve-in-place).
 ///
-/// Supervisor memasukkan kredensial staf-nya untuk mengotorisasi satu aksi
-/// (diverifikasi ke server via `/auth/staff/login` tanpa mengganggu sesi kasir).
-/// Mengembalikan nama supervisor penyetuju bila disetujui, atau `null` bila
-/// dibatalkan/gagal.
+/// Supervisor mengetik PIN-nya untuk mengotorisasi satu aksi kasir (diskon/selisih kas di
+/// atas ambang). PIN diverifikasi ke server (`/pos/approvals/verify-pin`, rate-limited) tanpa
+/// mengganti sesi kasir. Mengembalikan nama supervisor penyetuju, atau `null` bila batal/gagal.
 Future<String?> showSupervisorApprovalDialog(
   BuildContext context, {
   required String title,
@@ -37,35 +37,34 @@ class _SupervisorApprovalDialog extends ConsumerStatefulWidget {
 
 class _SupervisorApprovalDialogState
     extends ConsumerState<_SupervisorApprovalDialog> {
-  final _identifierController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _pinController = TextEditingController();
   String? _error;
   bool _busy = false;
 
   @override
   void dispose() {
-    _identifierController.dispose();
-    _passwordController.dispose();
+    _pinController.dispose();
     super.dispose();
   }
 
   Future<void> _approve() async {
     if (_busy) return;
+    final pin = _pinController.text.trim();
+    if (pin.length < 4) {
+      setState(() => _error = 'Masukkan PIN supervisor (4–6 digit).');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final name = await ref.read(authApiProvider).verifyStaff(
-        _identifierController.text,
-        _passwordController.text,
-        requireSupervisor: true,
-      );
+      final name = await ref.read(authApiProvider).verifySupervisorPin(pin);
       if (!mounted) return;
       if (name == null) {
         setState(() {
           _busy = false;
-          _error = 'Akun ini bukan supervisor.';
+          _error = 'PIN supervisor salah.';
         });
         return;
       }
@@ -74,7 +73,9 @@ class _SupervisorApprovalDialogState
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e.statusCode == 401 ? 'Kredensial tidak valid.' : e.message;
+        _error = e.statusCode == 429
+            ? 'Terlalu banyak percobaan. Tunggu sebentar.'
+            : e.message;
       });
     } catch (_) {
       if (!mounted) return;
@@ -98,22 +99,17 @@ class _SupervisorApprovalDialogState
             Text(widget.message),
             const SizedBox(height: 16),
             TextField(
-              controller: _identifierController,
+              controller: _pinController,
               autofocus: true,
-              keyboardType: TextInputType.text,
-              decoration: const InputDecoration(
-                labelText: 'Username Supervisor',
-                prefixIcon: Icon(Icons.shield_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _passwordController,
               obscureText: true,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onSubmitted: (_) => _approve(),
               decoration: const InputDecoration(
-                labelText: 'Password',
-                prefixIcon: Icon(Icons.lock_rounded),
+                labelText: 'PIN Supervisor',
+                counterText: '',
+                prefixIcon: Icon(Icons.password_rounded),
               ),
             ),
             if (_error != null) ...[

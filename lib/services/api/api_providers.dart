@@ -4,6 +4,7 @@ import '../../core/config/app_config.dart';
 import 'api_client.dart';
 import 'auth_api.dart';
 import 'cash_movements_api.dart';
+import 'config_api.dart';
 import 'pricing_api.dart';
 import 'products_api.dart';
 import 'self_orders_api.dart';
@@ -46,6 +47,10 @@ final transactionsApiProvider = Provider<TransactionsApi>(
 
 final pricingApiProvider = Provider<PricingApi>(
   (ref) => PricingApi(ref.read(apiClientProvider)),
+);
+
+final configApiProvider = Provider<ConfigApi>(
+  (ref) => ConfigApi(ref.read(apiClientProvider)),
 );
 
 final cashMovementsApiProvider = Provider<CashMovementsApi>(

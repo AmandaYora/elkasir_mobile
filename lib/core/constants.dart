@@ -9,16 +9,9 @@ const appAdminProductName = 'Elkasir Admin';
 const defaultProductImageUrl =
     'https://is3.cloudhost.id/elcodelabs/elkasir/upload/defaults/no-image.jpg';
 
-/// Authorization thresholds enforced for UX (mirror the server's store settings;
-/// the server is the source of truth and re-checks them).
-/// Discounts above this percent of subtotal need supervisor approval.
-const maxDiscountPercentWithoutApproval = 10;
-
-/// Operational expenses above this (Rupiah) need supervisor approval.
-const maxOperationalExpenseWithoutApproval = 200000;
-
-/// Cash variance above this tolerance (Rupiah) needs supervisor approval on close.
-const cashVarianceToleranceWithoutApproval = 5000;
+// Approval thresholds (max discount %, expense ceiling, cash-variance tolerance) now come
+// from the server via GET /pos/config (PosAppState.maxDiscountPercent, etc.) so they match
+// the admin's store settings; the server remains the source of truth and re-checks them.
 
 /// Store/outlet identity for this terminal. Configure per device via dart-define;
 /// defaults to the brand with blank contact details (no placeholder data).

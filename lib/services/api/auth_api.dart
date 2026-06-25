@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import 'api_exception.dart';
 import 'token_store.dart';
 
 /// The authenticated principal returned by the API (`/auth/me`, login `user`).
@@ -67,6 +68,23 @@ class AuthApi {
     final session = AuthSession.fromJson(data['user'] as Map<String, dynamic>);
     if (requireSupervisor && session.role != 'supervisor') return null;
     return session.name;
+  }
+
+  /// Verify a supervisor approval PIN (`POST /pos/approvals/verify-pin`, rate-limited).
+  /// Returns the matching supervisor's name on success, or null if the PIN is invalid.
+  /// Used for in-place (approve-in-place) authorization of cashier actions over a threshold.
+  Future<String?> verifySupervisorPin(String pin) async {
+    try {
+      final data = await _client.post(
+        '/pos/approvals/verify-pin',
+        body: {'pin': pin.trim()},
+      ) as Map<String, dynamic>;
+      final name = (data['approvedByName'] ?? '') as String;
+      return name.isEmpty ? null : name;
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) return null; // PIN salah
+      rethrow;
+    }
   }
 
   /// Resolve the current principal from a stored token (for session restore).

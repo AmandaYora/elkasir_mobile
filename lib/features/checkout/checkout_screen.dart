@@ -157,7 +157,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
-                    children: PaymentMethod.values.map((method) {
+                    // QRIS disembunyikan bila admin menonaktifkannya (hide, bukan disable).
+                    children:
+                        (state.featureQris
+                                ? PaymentMethod.values
+                                : const [PaymentMethod.cash])
+                            .map((method) {
                       final selected = state.selectedPaymentMethod == method;
                       return Expanded(
                         child: Padding(
