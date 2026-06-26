@@ -4,11 +4,8 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../core/utils/formatters.dart';
 import '../models/pos_models.dart';
 
-/// Cetak struk NYATA ke printer thermal ESC/POS via Bluetooth (classic SPP),
-/// termasuk perintah buka laci kas (cash drawer kick).
-///
-/// Catatan: printer harus sudah dipasangkan (paired) di Pengaturan Bluetooth
-/// Android terlebih dahulu. Memerlukan perangkat fisik untuk diuji.
+/// Cetak struk ESC/POS via Bluetooth (classic SPP), termasuk buka laci kas.
+/// Printer harus sudah dipasangkan (paired) di Pengaturan Bluetooth Android lebih dulu.
 class ThermalPrinterService {
   Future<bool> get isBluetoothOn => PrintBluetoothThermal.bluetoothEnabled;
 
@@ -25,7 +22,6 @@ class ThermalPrinterService {
   PaperSize _size(String paperWidth) =>
       paperWidth.trim().startsWith('58') ? PaperSize.mm58 : PaperSize.mm80;
 
-  /// Pastikan tersambung ke [macAddress]; sambungkan bila belum.
   Future<bool> ensureConnected(String macAddress) async {
     if (await PrintBluetoothThermal.connectionStatus) return true;
     if (macAddress.isEmpty) return false;

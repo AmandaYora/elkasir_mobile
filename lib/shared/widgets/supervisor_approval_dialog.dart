@@ -6,17 +6,23 @@ import '../../core/theme/app_theme.dart';
 import '../../services/api/api_exception.dart';
 import '../../services/api/api_providers.dart';
 
-/// Dialog persetujuan supervisor (approve-in-place).
-///
-/// Supervisor mengetik PIN-nya untuk mengotorisasi satu aksi kasir (diskon/selisih kas di
-/// atas ambang). PIN diverifikasi ke server (`/pos/approvals/verify-pin`, rate-limited) tanpa
-/// mengganti sesi kasir. Mengembalikan nama supervisor penyetuju, atau `null` bila batal/gagal.
-Future<String?> showSupervisorApprovalDialog(
+/// Hasil persetujuan supervisor. PIN dibawa agar aksi final menyertakannya — server
+/// memverifikasi ulang & mencatat penyetuju (anti-spoof). Sesaat: jangan dipersistensi.
+class SupervisorApproval {
+  const SupervisorApproval({required this.pin, required this.name});
+
+  final String pin;
+  final String name;
+}
+
+/// Dialog persetujuan supervisor: PIN diverifikasi ke server (`/pos/approvals/verify-pin`,
+/// rate-limited) tanpa mengganti sesi kasir. Mengembalikan [SupervisorApproval] atau `null`.
+Future<SupervisorApproval?> showSupervisorApprovalDialog(
   BuildContext context, {
   required String title,
   required String message,
 }) {
-  return showDialog<String>(
+  return showDialog<SupervisorApproval>(
     context: context,
     barrierDismissible: false,
     builder: (context) =>
@@ -68,7 +74,7 @@ class _SupervisorApprovalDialogState
         });
         return;
       }
-      Navigator.pop(context, name);
+      Navigator.pop(context, SupervisorApproval(pin: pin, name: name));
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {

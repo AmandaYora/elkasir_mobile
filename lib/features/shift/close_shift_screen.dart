@@ -65,7 +65,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
             flex: 4,
             child: SectionCard(
               title: 'Tutup Shift',
-              subtitle: 'Penutupan shift membutuhkan input kas aktual.',
+              subtitle: 'Masukkan kas aktual untuk menutup shift.',
               expandChild: true,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,7 +102,6 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                         } else {
                           _denomCounts[denom] = count;
                         }
-                        // Jumlah pecahan otomatis mengisi Kas Aktual.
                         _actualCashController.text = _denomTotal.toString();
                       });
                     },
@@ -127,6 +126,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                             final expectedCash = shift.expectedCash;
                             final variance = actualCash - expectedCash;
                             var approver = '';
+                            var approverPin = '';
                             final tol = state.cashVarianceTolerance;
                             if (variance.abs() > tol) {
                               // Supervisor menutup langsung; kasir butuh PIN supervisor.
@@ -146,7 +146,8 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                                 if (result == null) {
                                   return;
                                 }
-                                approver = result;
+                                approver = result.name;
+                                approverPin = result.pin;
                               }
                             }
                             if (!context.mounted) {
@@ -163,6 +164,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                                 actualCash: actualCash,
                                 notes: _notesController.text,
                                 approvedBy: approver,
+                                supervisorPin: approverPin,
                               );
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -184,7 +186,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
           Expanded(
             flex: 5,
             child: SectionCard(
-              title: 'Hitung Kas Fisik (Blind Count)',
+              title: 'Hitung Kas Fisik',
               subtitle:
                   'Hitung seluruh uang fisik di laci, lalu masukkan jumlahnya.',
               expandChild: true,
@@ -192,8 +194,8 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                 icon: Icons.calculate_rounded,
                 title: 'Perhitungan tertutup',
                 message:
-                    'Perkiraan kas & selisih sengaja disembunyikan untuk '
-                    'mencegah penyesuaian. Rincian rekonsiliasi tampil setelah '
+                    'Perkiraan kas dan selisih sengaja disembunyikan agar '
+                    'tidak memengaruhi hitungan. Rinciannya tampil setelah '
                     'Anda menekan Tutup Shift dan mengonfirmasi.',
               ),
             ),
@@ -233,8 +235,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
   }
 }
 
-/// Tally per pecahan (opsional) untuk tutup shift: kasir mengisi jumlah lembar/koin tiap
-/// pecahan; totalnya otomatis mengisi "Kas Aktual". Mengurangi salah hitung manual.
+/// Tally per pecahan: jumlah tiap pecahan otomatis mengisi "Kas Aktual" — mengurangi salah hitung manual.
 class _DenominationTally extends StatelessWidget {
   const _DenominationTally({
     required this.denoms,

@@ -1,9 +1,7 @@
 /// Pricing rules — MUST stay identical to the server (apps/api/internal/domain/pricing.go).
-/// Dipakai POS untuk menghitung Layanan & PPN agar total konsisten dengan backend.
 library;
 
 /// Pembulatan biaya layanan KE ATAS: sisa thd ribuan ≤500 → x.500, >500 → ribuan berikutnya.
-/// Contoh: 1350→1500, 1650→2000, 480→500, 540→1000, 1500→1500.
 int roundUpService(int n) {
   if (n <= 0) return 0;
   final rem = n % 1000;

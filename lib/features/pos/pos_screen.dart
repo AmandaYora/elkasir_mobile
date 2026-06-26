@@ -180,7 +180,7 @@ class PosScreen extends ConsumerWidget {
                       approvedBy: state.cashierName,
                     );
                   } else {
-                    final approver = await showSupervisorApprovalDialog(
+                    final approval = await showSupervisorApprovalDialog(
                       context,
                       title: 'Persetujuan Supervisor',
                       message:
@@ -188,13 +188,14 @@ class PosScreen extends ConsumerWidget {
                           '${formatIDR(cap)} ($pct%). '
                           'Diperlukan PIN supervisor.',
                     );
-                    if (approver == null) {
+                    if (approval == null) {
                       return;
                     }
                     controller.setDiscount(
                       value,
                       supervisorApproved: true,
-                      approvedBy: approver,
+                      approvedBy: approval.name,
+                      supervisorPin: approval.pin,
                     );
                   }
                 } else {
@@ -242,7 +243,7 @@ class _ProductToolbar extends StatelessWidget {
                 child: TextField(
                   onChanged: onSearchChanged,
                   decoration: const InputDecoration(
-                    hintText: 'Cari menu atau SKU',
+                    hintText: 'Cari menu atau kode',
                     prefixIcon: Icon(Icons.search_rounded),
                   ),
                 ),
@@ -446,8 +447,6 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
-/// Fallback avatar (inisial nama di kotak warna kategori) saat gambar produk
-/// belum/gagal dimuat.
 class _InitialsAvatar extends StatelessWidget {
   const _InitialsAvatar({required this.initials, required this.category});
 
@@ -681,8 +680,7 @@ class _OrderContextPanel extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          // Backend hanya mendukung dineIn/takeaway (ENUM DB) — jangan tawarkan pickup/delivery
-          // yang akan hilang saat disimpan.
+          // Backend hanya dukung dineIn/takeaway (ENUM DB); pickup/delivery akan hilang saat disimpan.
           children: const [OrderType.dineIn, OrderType.takeaway].map((type) {
             final selected = selectedOrderType == type;
             return ChoiceChip(

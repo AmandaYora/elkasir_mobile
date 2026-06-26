@@ -49,6 +49,7 @@ class ShiftsApi {
     required int actualCash,
     int drawerOpenCount = 0,
     String closeApprovedBy = '',
+    String supervisorPin = '',
     required String cashierName,
   }) async {
     final data = await _client.post(
@@ -57,6 +58,7 @@ class ShiftsApi {
         'actualCash': actualCash,
         'drawerOpenCount': drawerOpenCount,
         if (closeApprovedBy.isNotEmpty) 'closeApprovedBy': closeApprovedBy,
+        if (supervisorPin.isNotEmpty) 'supervisorPin': supervisorPin,
       },
     );
     return _map(data as Map<String, dynamic>, cashierName);

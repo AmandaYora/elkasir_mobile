@@ -325,13 +325,39 @@ class SaleTransaction {
   final int subtotal;
   final int discount;
   final int tax; // PPN
-  final int serviceCharge; // biaya layanan 2% (rounded)
+  final int serviceCharge; // biaya layanan (rounded)
   final int gatewayFee; // biaya gateway QRIS (0 utk kasir)
   final int serviceLine; // "Layanan" = serviceCharge + gatewayFee
   final int total;
   final int amountReceived;
   final int change;
   final OrderSource source;
+
+  SaleTransaction copyWith({TransactionStatus? status}) {
+    return SaleTransaction(
+      id: id,
+      code: code,
+      shiftId: shiftId,
+      createdAt: createdAt,
+      cashierName: cashierName,
+      orderType: orderType,
+      customerName: customerName,
+      tableLabel: tableLabel,
+      paymentMethod: paymentMethod,
+      status: status ?? this.status,
+      items: items,
+      subtotal: subtotal,
+      discount: discount,
+      tax: tax,
+      serviceCharge: serviceCharge,
+      gatewayFee: gatewayFee,
+      serviceLine: serviceLine,
+      total: total,
+      amountReceived: amountReceived,
+      change: change,
+      source: source,
+    );
+  }
 }
 
 class SelfOrder {
@@ -486,8 +512,7 @@ class CashMovement {
   final String shiftId;
 }
 
-/// Cara mencetak struk: lewat dialog/printer sistem (PDF), atau langsung ke
-/// printer thermal ESC/POS via Bluetooth.
+/// Cara mencetak struk: printer sistem (PDF) atau thermal ESC/POS via Bluetooth.
 enum PrintMode { system, bluetooth }
 
 class PrinterDevice {

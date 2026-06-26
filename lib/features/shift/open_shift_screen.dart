@@ -65,7 +65,7 @@ class _OpenShiftScreenState extends ConsumerState<OpenShiftScreen> {
                       ),
                     ),
                     Text(
-                      '${state.store.outlet} terminal POS',
+                      '${state.store.outlet} · Kasir',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.mutedForeground,
                       ),

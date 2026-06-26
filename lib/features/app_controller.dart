@@ -138,8 +138,7 @@ class PosAppState {
 
   int get subtotal => cart.fold(0, (sum, item) => sum + item.lineTotal);
 
-  // Layanan & PPN dihitung dengan aturan yang SAMA dengan server (lihat core/pricing.dart).
-  // Gateway fee = 0 di kasir (tidak lewat payment gateway).
+  // Layanan & PPN memakai aturan SAMA dengan server (lihat core/pricing.dart); gateway fee = 0 di kasir.
   int get service => serviceChargeOf(subtotal, servicePercent);
 
   int get tax => taxOf(subtotal, taxPercent, taxEnabled);
@@ -153,7 +152,6 @@ class PosAppState {
 
   int get totalItems => cart.fold(0, (sum, item) => sum + item.quantity);
 
-  /// Categories for the menu filter, derived from the live catalog.
   List<String> get categories {
     final set = <String>{};
     for (final p in products) {
@@ -294,6 +292,12 @@ class AppController extends Notifier<PosAppState> {
   final _printerSettings = PrinterSettingsStore();
   final _configStore = ConfigStore();
 
+  /// PIN supervisor untuk diskon di atas plafon — sesaat, TIDAK dipersistensi; dikirim ke server saat checkout lalu dibersihkan.
+  String _discountSupervisorPin = '';
+
+  /// Idempotency-Key penjualan: dibuat sekali per upaya bayar dan dipertahankan saat retry, agar server me-replay (bukan transaksi/stok ganda).
+  String? _pendingSaleKey;
+
   @override
   PosAppState build() {
     _hydratePrinter();
@@ -304,9 +308,7 @@ class AppController extends Notifier<PosAppState> {
 
   // ── Session restore (cold start) ──────────────────────────────────────────
 
-  /// Pulihkan sesi dari token tersimpan saat app dibuka, agar kasir tidak perlu login
-  /// ulang tiap kali. Token kedaluwarsa/invalid → jatuh ke layar login. Splash ditahan
-  /// lewat flag [PosAppState.restoring] sampai upaya ini selesai.
+  /// Pulihkan sesi dari token tersimpan agar kasir tak perlu login ulang; token invalid → ke layar login.
   Future<void> _restoreSession() async {
     try {
       await ref.read(tokenStoreProvider).load();
@@ -331,7 +333,6 @@ class AppController extends Notifier<PosAppState> {
 
   // ── Config (server-driven feature flags + pricing + thresholds) ───────────
 
-  /// Terapkan PosConfig server ke state (harga, fitur, ambang persetujuan).
   PosAppState _withConfig(PosAppState s, PosConfig c) {
     var next = s.copyWith(
       servicePercent: c.servicePercent,
@@ -354,14 +355,13 @@ class AppController extends Notifier<PosAppState> {
     return next;
   }
 
-  /// Muat konfigurasi tersimpan (last-known-good) saat start agar flag akurat lebih awal.
+  /// Muat konfigurasi last-known-good saat start agar flag akurat lebih awal.
   Future<void> _hydrateConfig() async {
     final cached = await _configStore.load();
     if (cached != null) state = _withConfig(state, cached);
   }
 
-  /// Refresh konfigurasi dari server (dipanggil saat app kembali ke foreground). Fail-open:
-  /// bila gagal, pertahankan nilai terakhir (cache / in-code default) — kasir tak terblokir.
+  /// Refresh konfigurasi dari server saat app kembali ke foreground; fail-open: gagal → pertahankan nilai terakhir.
   Future<void> refreshConfig() async {
     if (!state.isAuthenticated) return;
     try {
@@ -373,9 +373,7 @@ class AppController extends Notifier<PosAppState> {
 
   // ── Auth ────────────────────────────────────────────────────────────────
 
-  /// POS staff login (`/auth/staff/login`). On success the session data is
-  /// loaded from the server (catalog, tables, open shift + its records).
-  /// Returns an error message on failure, or `null` on success.
+  /// POS staff login (`/auth/staff/login`); on success loads session from server. Returns error message, or null on success.
   Future<String?> login({
     required String identifier,
     required String password,
@@ -407,8 +405,7 @@ class AppController extends Notifier<PosAppState> {
     }
   }
 
-  /// Logout: revoke the refresh token + clear local session. The open shift is
-  /// not closed — it stays open server-side and resumes on next login.
+  /// Logout: revoke refresh token + clear local session. Open shift NOT closed — stays open server-side, resumes next login.
   void logout() {
     unawaited(ref.read(authApiProvider).logout());
     state = PosAppState.initial().copyWith(isAuthenticated: false);
@@ -432,7 +429,7 @@ class AppController extends Notifier<PosAppState> {
       shift = await ref.read(shiftsApiProvider).current(name);
     } catch (_) {}
     try {
-      // Satu payload konfigurasi POS (harga + fitur + ambang); simpan last-known-good.
+      // Simpan last-known-good agar flag/harga akurat di cold start berikutnya.
       cfg = await ref.read(configApiProvider).get();
       await _configStore.save(cfg);
     } catch (_) {}
@@ -478,7 +475,6 @@ class AppController extends Notifier<PosAppState> {
     );
   }
 
-  /// Reload the catalog, open shift and its records (pull-to-refresh).
   Future<void> refreshSession() => _loadSession();
 
   // ── Shift ────────────────────────────────────────────────────────────────
@@ -522,6 +518,7 @@ class AppController extends Notifier<PosAppState> {
     required int actualCash,
     String notes = '',
     String approvedBy = '',
+    String supervisorPin = '',
   }) async {
     final shift = state.currentShift;
     if (shift == null || shift.status != ShiftStatus.open) {
@@ -533,6 +530,7 @@ class AppController extends Notifier<PosAppState> {
         actualCash: actualCash,
         drawerOpenCount: shift.drawerOpenCount,
         closeApprovedBy: approvedBy,
+        supervisorPin: supervisorPin,
         cashierName: state.cashierName,
       );
       state = state.copyWith(
@@ -629,6 +627,8 @@ class AppController extends Notifier<PosAppState> {
   }
 
   void clearCart() {
+    _discountSupervisorPin = '';
+    _pendingSaleKey = null; // batalkan upaya bayar tertunda saat keranjang dikosongkan
     state = state.copyWith(
       cart: const [],
       discount: 0,
@@ -638,12 +638,12 @@ class AppController extends Notifier<PosAppState> {
     );
   }
 
-  /// Apply a discount. Above the store's max-discount percent (from /pos/config) it
-  /// is only honoured with [supervisorApproved]; otherwise it is clamped.
+  /// Diskon di atas max-discount percent (/pos/config) hanya berlaku bila [supervisorApproved]; selain itu di-clamp.
   void setDiscount(
     int value, {
     bool supervisorApproved = false,
     String approvedBy = '',
+    String supervisorPin = '',
   }) {
     final subtotal = state.subtotal;
     var amount = math.max(0, math.min(value, subtotal));
@@ -651,6 +651,8 @@ class AppController extends Notifier<PosAppState> {
     if (!supervisorApproved && amount > cap) {
       amount = cap;
     }
+    // PIN hanya untuk kasir yang menyetujui via PIN; supervisor login → PIN kosong, server mengenali rolenya.
+    _discountSupervisorPin = supervisorApproved ? supervisorPin : '';
     state = state.copyWith(
       discount: amount,
       discountApprovedBy: supervisorApproved ? approvedBy : '',
@@ -679,9 +681,7 @@ class AppController extends Notifier<PosAppState> {
 
   // ── Sale ──────────────────────────────────────────────────────────────────
 
-  /// Submit the cart as a cashier sale (`POST /transactions`, idempotent).
-  /// Returns an error message on failure, or `null` on success (the receipt is
-  /// then shown from [PosAppState.lastTransaction]).
+  /// Submit cart as cashier sale (`POST /transactions`, idempotent). Returns error message, or null on success.
   Future<String?> completePayment() async {
     final shift = state.currentShift;
     if (shift == null || shift.status != ShiftStatus.open) {
@@ -708,7 +708,9 @@ class AppController extends Notifier<PosAppState> {
           ),
         )
         .toList();
-    final idemKey = 'pos-${DateTime.now().microsecondsSinceEpoch}-${shift.id}';
+    // Key dipertahankan antar-retry: time-out lalu "Bayar" lagi → key sama, server me-replay, bukan penjualan baru.
+    final idemKey =
+        _pendingSaleKey ??= 'pos-${DateTime.now().microsecondsSinceEpoch}-${shift.id}';
 
     try {
       final created = await ref.read(transactionsApiProvider).create(
@@ -721,10 +723,10 @@ class AppController extends Notifier<PosAppState> {
         tableId: dineIn ? _tableIdFor(state.tableLabel) : null,
         customerNote: dineIn ? '' : state.customerName,
         discountApprovedBy: state.discountApprovedBy,
+        supervisorPin: _discountSupervisorPin,
       );
 
-      // Build the receipt from SERVER-authoritative values (subtotal, layanan, PPN, total,
-      // kembalian) so the struk persis sama dengan yang dicatat backend.
+      // Struk dibangun dari nilai SERVER-authoritative (subtotal/layanan/PPN/total/kembalian) agar sama persis dengan backend.
       final transaction = SaleTransaction(
         id: created.id,
         code: created.code,
@@ -758,6 +760,8 @@ class AppController extends Notifier<PosAppState> {
         change: created.change,
       );
 
+      _discountSupervisorPin = '';
+      _pendingSaleKey = null; // sukses → penjualan berikutnya memakai key baru
       state = state.copyWith(
         currentShift: _shiftAfterSale(shift, transaction),
         transactions: [transaction, ...state.transactions],
@@ -773,15 +777,17 @@ class AppController extends Notifier<PosAppState> {
       );
       return null;
     } on ApiException catch (e) {
+      // Server merespons (bukan time-out) → tidak ter-commit; buang key agar retry tak ditolak sebagai duplikat.
+      _pendingSaleKey = null;
       return e.message;
     } catch (_) {
+      // Time-out/jaringan: status server tak pasti → TAHAN key, retry akan di-replay bila tadi sempat ter-commit.
       return 'Pembayaran gagal. Coba lagi.';
     }
   }
 
   // ── Self-orders ────────────────────────────────────────────────────────────
 
-  /// Accept an incoming self-order: advance it to "preparing" on the server.
   Future<String?> acceptSelfOrder(String id) async {
     if (!state.hasOpenShift) {
       return 'Buka shift dulu untuk menerima pesanan.';
@@ -806,7 +812,6 @@ class AppController extends Notifier<PosAppState> {
     }
   }
 
-  /// Mark a self-order completed and remove it from the inbox.
   Future<String?> completeSelfOrder(String id) async {
     try {
       await ref
@@ -823,8 +828,7 @@ class AppController extends Notifier<PosAppState> {
     }
   }
 
-  /// Tebus pesanan bayar-di-kasir lewat kode klaim: terima tunai → server menandai lunas
-  /// & mencatat transaksi. Lalu muat ulang inbox + data shift. Mengembalikan pesan error / null.
+  /// Tebus pesanan bayar-di-kasir via kode klaim: terima tunai → server tandai lunas & catat transaksi ke shift.
   Future<String?> redeemSelfOrder(String claimCode) async {
     if (claimCode.trim().isEmpty) {
       return 'Masukkan kode tebus.';
@@ -834,7 +838,6 @@ class AppController extends Notifier<PosAppState> {
     }
     try {
       await ref.read(selfOrdersApiProvider).redeemCheckout(claimCode.trim());
-      // Server kini menandai pesanan lunas + mencatat penjualan tunai ke shift berjalan.
       await _loadShiftData();
       return null;
     } on ApiException catch (e) {
@@ -857,16 +860,16 @@ class AppController extends Notifier<PosAppState> {
 
   // ── Cetak struk ────────────────────────────────────────────────────────────
 
-  /// Cetak struk sesuai mode aktif. Mengembalikan pesan error, atau null bila OK.
+  /// Cetak struk sesuai mode aktif; mengembalikan pesan error, atau null bila OK.
   Future<String?> printReceipt(SaleTransaction transaction) async {
     final p = state.printer;
     if (p.mode == PrintMode.bluetooth) {
       if (!p.hasDevice) {
-        return 'Pilih printer thermal dulu di Pengaturan Struk.';
+        return 'Pilih printer Bluetooth dulu di Pengaturan Struk.';
       }
       if (!await _thermal.ensureConnected(p.deviceAddress)) {
         _syncConnection();
-        return 'Printer thermal tidak tersambung.';
+        return 'Printer Bluetooth tidak tersambung.';
       }
       final printed = await _thermal.printReceipt(
         state.store,
@@ -874,7 +877,7 @@ class AppController extends Notifier<PosAppState> {
         p.paperWidth,
       );
       _syncConnection();
-      return printed ? null : 'Gagal mengirim struk ke printer.';
+      return printed ? null : 'Gagal mengirim struk ke printer. Coba lagi.';
     }
     await _printerService.printReceipt(state.store, transaction, p.paperWidth);
     return null;
@@ -893,18 +896,44 @@ class AppController extends Notifier<PosAppState> {
     return printReceipt(transaction);
   }
 
-  /// Cetak struk contoh untuk memastikan printer berfungsi.
+  /// Void: hanya transaksi TUNAI shift berjalan; kasir wajib [supervisorPin] (diverifikasi server); server restock & keluarkan dari rekap.
+  Future<String?> voidTransaction(
+    SaleTransaction tx, {
+    String reason = '',
+    String supervisorPin = '',
+  }) async {
+    try {
+      await ref
+          .read(transactionsApiProvider)
+          .voidTransaction(txId: tx.id, reason: reason, supervisorPin: supervisorPin);
+      final cancelled = tx.copyWith(status: TransactionStatus.cancelled);
+      state = state.copyWith(
+        transactions: state.transactions
+            .map((t) => t.id == tx.id ? cancelled : t)
+            .toList(),
+        selectedTransaction: state.selectedTransaction?.id == tx.id
+            ? cancelled
+            : state.selectedTransaction,
+      );
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Gagal membatalkan transaksi.';
+    }
+  }
+
   Future<String?> testPrint() async {
     final p = state.printer;
     if (p.mode == PrintMode.bluetooth) {
-      if (!p.hasDevice) return 'Pilih printer thermal dulu.';
+      if (!p.hasDevice) return 'Pilih printer Bluetooth dulu.';
       if (!await _thermal.ensureConnected(p.deviceAddress)) {
         _syncConnection();
-        return 'Printer thermal tidak tersambung.';
+        return 'Printer Bluetooth tidak tersambung.';
       }
       final printed = await _thermal.printSample(state.store, p.paperWidth);
       _syncConnection();
-      return printed ? null : 'Gagal mengirim ke printer.';
+      return printed ? null : 'Gagal mengirim ke printer. Coba lagi.';
     }
     await _printerService.printSample(state.store, p.paperWidth);
     return null;
@@ -914,16 +943,16 @@ class AppController extends Notifier<PosAppState> {
   Future<String?> openCashDrawer() async {
     final p = state.printer;
     if (p.mode != PrintMode.bluetooth) {
-      return 'Buka laci memerlukan printer thermal (mode ESC/POS).';
+      return 'Buka laci hanya tersedia untuk printer Bluetooth.';
     }
-    if (!p.hasDevice) return 'Pilih printer thermal dulu.';
+    if (!p.hasDevice) return 'Pilih printer Bluetooth dulu.';
     if (!await _thermal.ensureConnected(p.deviceAddress)) {
       _syncConnection();
-      return 'Printer thermal tidak tersambung.';
+      return 'Printer Bluetooth tidak tersambung.';
     }
     final opened = await _thermal.openDrawer();
     _syncConnection();
-    return opened ? null : 'Gagal membuka laci.';
+    return opened ? null : 'Gagal membuka laci. Coba lagi.';
   }
 
   void setPaperWidth(String paperWidth) {
@@ -949,10 +978,8 @@ class AppController extends Notifier<PosAppState> {
 
   Future<bool> get isBluetoothOn => _thermal.isBluetoothOn;
 
-  /// Printer Bluetooth yang sudah dipasangkan di perangkat.
   Future<List<BluetoothInfo>> scanPrinters() => _thermal.pairedDevices();
 
-  /// Pilih + sambungkan printer thermal, lalu simpan pilihannya.
   Future<String?> selectPrinter(String name, String macAddress) async {
     final ok = await _thermal.connect(macAddress);
     final printer = state.printer.copyWith(
@@ -962,7 +989,7 @@ class AppController extends Notifier<PosAppState> {
     );
     state = state.copyWith(printer: printer);
     await _printerSettings.save(printer);
-    return ok ? null : 'Gagal menyambung ke $name.';
+    return ok ? null : 'Gagal menyambung ke $name. Coba lagi.';
   }
 
   Future<void> _hydratePrinter() async {

@@ -75,7 +75,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'POS F&B untuk restoran, kafe, dan gerai layanan cepat',
+                      'Aplikasi kasir untuk restoran, kafe, dan gerai layanan cepat',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: Colors.white.withValues(alpha: 0.72),
                         fontWeight: FontWeight.w600,
@@ -109,7 +109,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   constraints: const BoxConstraints(maxWidth: 430),
                   child: SectionCard(
                     title: 'Masuk Staf',
-                    subtitle: 'Masuk dengan username & password staf POS.',
+                    subtitle: 'Masuk dengan username dan password staf.',
                     expandChild: true,
                     child: SingleChildScrollView(
                       child: Column(

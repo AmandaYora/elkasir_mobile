@@ -2,9 +2,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/config_api.dart';
 
-/// Cache konfigurasi POS terakhir yang berhasil diambil (last-known-good). Dipakai sebagai
-/// fallback saat offline/gagal fetch sehingga flag & ambang tetap akurat tanpa membuat layar
-/// kosong (in-code default tetap jadi jaring pengaman terakhir bila cache belum ada).
+/// Cache last-known-good PosConfig sebagai fallback saat offline/gagal fetch;
+/// in-code default tetap jadi jaring pengaman terakhir bila cache belum ada.
 class ConfigStore {
   static const _kService = 'cfg_service_percent';
   static const _kTax = 'cfg_tax_percent';

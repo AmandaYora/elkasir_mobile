@@ -13,7 +13,7 @@ class AppGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(appControllerProvider);
-    // Splash sementara memulihkan sesi tersimpan (hindari kedip layar login saat cold start).
+    // Splash saat memulihkan sesi — hindari kedip layar login di cold start.
     if (state.restoring) {
       return const Scaffold(
         body: Center(

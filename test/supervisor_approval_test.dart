@@ -28,7 +28,7 @@ http.Response _verifyOk(String name) => _resp({
 }, 200);
 
 class _Holder {
-  String? result;
+  SupervisorApproval? result;
 }
 
 void main() {
@@ -83,7 +83,9 @@ void main() {
   ) async {
     final mock = MockClient((_) async => _verifyOk('Siti'));
     final h = await openAndApprove(tester, mock, pin: '4321');
-    expect(h.result, 'Siti', reason: 'approval returns the supervisor name');
+    expect(h.result?.name, 'Siti', reason: 'approval returns the supervisor name');
+    expect(h.result?.pin, '4321',
+        reason: 'approval carries the verified PIN for server-side binding');
     expect(find.byType(AlertDialog), findsNothing, reason: 'dialog closes');
   });
 

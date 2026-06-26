@@ -1,8 +1,8 @@
 import 'api_client.dart';
 
-/// Konfigurasi POS dari server (GET /pos/config): harga (layanan/PPN), fitur yang aktif
-/// (untuk hide di klien), dan ambang persetujuan supervisor. Default = fail-open (semua
-/// fitur tampil) agar kasir tak pernah terblokir saat offline; server tetap menegakkan.
+/// Konfigurasi POS dari server (GET /pos/config): harga, fitur aktif, dan ambang
+/// persetujuan supervisor. Default = fail-open agar kasir tak terblokir saat
+/// offline; server tetap menegakkan.
 class PosConfig {
   const PosConfig({
     this.servicePercent = 2,

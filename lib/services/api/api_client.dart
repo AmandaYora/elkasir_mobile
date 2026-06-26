@@ -6,16 +6,10 @@ import 'package:http/http.dart' as http;
 import 'api_exception.dart';
 import 'token_store.dart';
 
-/// Thin HTTP client for the Elkasir Go API (`/api/v1`).
-///
-/// Responsibilities:
-/// - attaches `Authorization: Bearer <access>` when authenticated;
-/// - unwraps the standard success envelope `{ success, message, data, meta }`
-///   and returns `data`;
-/// - on `success: false` (or a non-2xx status) throws [ApiException] carrying
-///   the server `message`;
-/// - on a 401 it transparently refreshes the token once via `/auth/refresh`
-///   and retries the request.
+/// Thin HTTP client for the Elkasir Go API (`/api/v1`): attaches the bearer
+/// token, unwraps the `{ success, message, data }` envelope to return `data`,
+/// throws [ApiException] with the server `message` on failure, and refreshes
+/// the token once via `/auth/refresh` on a 401 then retries.
 class ApiClient {
   ApiClient({required this.baseUrl, required this.tokens, http.Client? client})
     : _http = client ?? http.Client();
@@ -110,7 +104,7 @@ class ApiClient {
 
     final message = decoded is Map && decoded['message'] is String
         ? decoded['message'] as String
-        : 'Permintaan gagal (${res.statusCode}).';
+        : 'Terjadi kesalahan. Coba lagi.';
     final code = decoded is Map &&
             decoded['errors'] is List &&
             (decoded['errors'] as List).isNotEmpty &&

@@ -12,11 +12,9 @@ import 'tables_api.dart';
 import 'token_store.dart';
 import 'transactions_api.dart';
 
-/// One token store for the whole app session.
 final tokenStoreProvider = Provider<TokenStore>((ref) => TokenStore());
 
-/// The shared HTTP client pointed at [AppConfig.apiBaseUrl]. Tests override this
-/// provider with a client built on an in-memory fake transport (no real network).
+/// Shared HTTP client. Tests override this provider with a fake transport.
 final apiClientProvider = Provider<ApiClient>(
   (ref) => ApiClient(
     baseUrl: AppConfig.apiBaseUrl,

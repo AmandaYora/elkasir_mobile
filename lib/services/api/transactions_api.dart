@@ -4,8 +4,7 @@ import 'api_client.dart';
 DateTime _date(dynamic v) =>
     (v is String ? DateTime.tryParse(v)?.toLocal() : null) ?? DateTime.now();
 
-/// Result of a created sale — server-authoritative id/code + full money breakdown
-/// (subtotal, layanan, gateway, PPN, total, kembalian).
+/// Result of a created sale — server-authoritative id/code and money breakdown.
 class CreatedSale {
   const CreatedSale({
     required this.id,
@@ -60,6 +59,7 @@ class TransactionsApi {
     String? tableId,
     String customerNote = '',
     String discountApprovedBy = '',
+    String supervisorPin = '',
   }) async {
     final body = <String, dynamic>{
       'items': items
@@ -77,6 +77,7 @@ class TransactionsApi {
       if (tableId != null && tableId.isNotEmpty) 'tableId': tableId,
       if (customerNote.isNotEmpty) 'customerNote': customerNote,
       if (discountApprovedBy.isNotEmpty) 'discountApprovedBy': discountApprovedBy,
+      if (supervisorPin.isNotEmpty) 'supervisorPin': supervisorPin,
     };
     final data = await _client.post(
       '/transactions',
@@ -99,8 +100,24 @@ class TransactionsApi {
     );
   }
 
-  /// Recent transactions (mapped for the history list). cashierName comes from
-  /// the session; tableLabel is resolved from [tableName].
+  /// Batalkan (void) transaksi tunai pada shift berjalan. Kasir wajib menyertakan
+  /// [supervisorPin] (diverifikasi server); supervisor/admin override otomatis.
+  Future<void> voidTransaction({
+    required String txId,
+    String reason = '',
+    String supervisorPin = '',
+  }) async {
+    await _client.post(
+      '/transactions/$txId/void',
+      body: {
+        if (reason.isNotEmpty) 'reason': reason,
+        if (supervisorPin.isNotEmpty) 'supervisorPin': supervisorPin,
+      },
+    );
+  }
+
+  /// Recent transactions for the history list. cashierName comes from the
+  /// session; tableLabel is resolved from [tableName].
   Future<List<SaleTransaction>> list({
     required String cashierName,
     String Function(String tableId)? tableName,
@@ -143,7 +160,7 @@ class TransactionsApi {
       paymentMethod: (j['paymentMethod'] == 'qris')
           ? PaymentMethod.qris
           : PaymentMethod.cash,
-      status: TransactionStatus.paid,
+      status: _status(j['status']),
       items: items,
       subtotal: (j['subtotal'] as num?)?.toInt() ?? 0,
       discount: (j['discount'] as num?)?.toInt() ?? 0,
@@ -158,5 +175,17 @@ class TransactionsApi {
           ? OrderSource.selfOrder
           : OrderSource.cashier,
     );
+  }
+
+  // Petakan status server ('completed'|'voided'|'refunded') ke enum POS.
+  TransactionStatus _status(Object? s) {
+    switch (s) {
+      case 'voided':
+        return TransactionStatus.cancelled;
+      case 'refunded':
+        return TransactionStatus.refunded;
+      default:
+        return TransactionStatus.paid;
+    }
   }
 }

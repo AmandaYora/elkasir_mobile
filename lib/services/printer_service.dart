@@ -7,16 +7,14 @@ import 'package:printing/printing.dart';
 import '../core/utils/formatters.dart';
 import '../models/pos_models.dart';
 
-/// Cetak struk NYATA: merender struk menjadi PDF lalu mengirimnya ke dialog cetak
-/// bawaan perangkat (printer apa pun yang dikenal sistem) atau membagikannya.
-/// Tidak memerlukan perangkat keras khusus.
+/// Render struk ke PDF lalu kirim ke dialog cetak sistem (printer apa pun yang
+/// dikenal perangkat) atau bagikan. Tidak butuh perangkat keras khusus.
 class PrinterService {
   PdfPageFormat _format(String paperWidth) =>
       paperWidth.trim().startsWith('58')
       ? PdfPageFormat.roll57
       : PdfPageFormat.roll80;
 
-  /// Buka dialog cetak sistem untuk struk transaksi.
   Future<void> printReceipt(
     StoreProfile store,
     SaleTransaction transaction,
@@ -29,7 +27,6 @@ class PrinterService {
     );
   }
 
-  /// Bagikan struk sebagai berkas PDF (WhatsApp, email, simpan, dll).
   Future<void> shareReceipt(
     StoreProfile store,
     SaleTransaction transaction,
@@ -42,7 +39,6 @@ class PrinterService {
     );
   }
 
-  /// Cetak struk contoh untuk memastikan printer berfungsi.
   Future<void> printSample(StoreProfile store, String paperWidth) async {
     final bytes = await _buildSample(store, _format(paperWidth));
     await Printing.layoutPdf(name: 'Tes Cetak', onLayout: (_) async => bytes);

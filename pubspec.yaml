@@ -19,7 +19,9 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.8.1
+  # Diturunkan dari ^3.8.1 → ^3.8.0 agar resolve dengan Flutter/Dart yang terpasang (Dart 3.8.0).
+  # 3.8.0→3.8.1 hanya beda patch (tanpa fitur bahasa baru), jadi aman.
+  sdk: ^3.8.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions

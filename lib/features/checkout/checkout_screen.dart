@@ -300,16 +300,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
               const SizedBox(height: 14),
               Text(
-                'QRIS Statis',
+                'Bayar QRIS',
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 6),
               Text(
-                'Minta pelanggan scan QRIS di meja kasir, masukkan nominal '
-                '${formatIDR(state.total)}, lalu bayar. Setelah memeriksa bukti '
-                'pembayaran, tekan "Lunas" untuk menyelesaikan transaksi.',
+                'Minta pelanggan scan QRIS dan bayar ${formatIDR(state.total)}. '
+                'Setelah pembayaran masuk, tekan "Lunas".',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.mutedForeground,
@@ -329,7 +328,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (!mounted) {
       return;
     }
-    // On success the controller navigates to the receipt screen.
+    // On success the controller already navigates to the receipt screen.
     if (error != null) {
       ScaffoldMessenger.of(
         context,

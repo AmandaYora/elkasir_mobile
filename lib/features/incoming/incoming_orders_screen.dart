@@ -27,7 +27,7 @@ class IncomingOrdersScreen extends ConsumerWidget {
       child: SectionCard(
         title: 'Pesanan Masuk',
         subtitle:
-            'Self-order via QR meja. QRIS otomatis lunas; "bayar di kasir" perlu ditebus.',
+            'Pesanan dari QR meja. QRIS otomatis lunas; "bayar di kasir" perlu ditebus.',
         padding: EdgeInsets.zero,
         expandChild: true,
         child: Column(
@@ -40,7 +40,7 @@ class IncomingOrdersScreen extends ConsumerWidget {
                   OutlinedButton.icon(
                     onPressed: () => _showRedeemDialog(context, ref),
                     icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
-                    label: const Text('Tebus Barcode'),
+                    label: const Text('Tebus Kode'),
                   ),
                 ],
               ),
@@ -78,7 +78,7 @@ class IncomingOrdersScreen extends ConsumerWidget {
   }
 }
 
-/// Dialog tebus manual: kasir mengetik/scan kode klaim pelanggan untuk menerima tunai.
+/// Tebus manual: kasir ketik/scan kode klaim pelanggan untuk menerima tunai.
 Future<void> _showRedeemDialog(BuildContext context, WidgetRef ref) async {
   final codeController = TextEditingController();
   String? error;
@@ -111,7 +111,7 @@ Future<void> _showRedeemDialog(BuildContext context, WidgetRef ref) async {
         }
 
         return AlertDialog(
-          title: const Text('Tebus Barcode'),
+          title: const Text('Tebus Kode'),
           content: SizedBox(
             width: 380,
             child: Column(

@@ -74,7 +74,7 @@ class ShiftSummaryScreen extends ConsumerWidget {
                     accent: AppColors.warning,
                     softAccent: AppColors.warningSoft,
                     caption: shift.status == ShiftStatus.open
-                        ? 'Tampil setelah tutup shift (blind count)'
+                        ? 'Tampil setelah tutup shift'
                         : 'Kas awal + penjualan tunai + modal - pengeluaran',
                   ),
                 ),

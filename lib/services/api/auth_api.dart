@@ -51,10 +51,9 @@ class AuthApi {
     return AuthSession.fromJson(data['user'] as Map<String, dynamic>);
   }
 
-  /// Step-up verification: confirm a staff credential without disturbing the
-  /// current session (no tokens saved). Returns the staff name, or null if the
-  /// credential is invalid or [requireSupervisor] is set and the role is not
-  /// supervisor.
+  /// Step-up check: confirm a staff credential without saving tokens (current
+  /// session untouched). Returns the name, or null if invalid or
+  /// [requireSupervisor] is set and the role is not supervisor.
   Future<String?> verifyStaff(
     String username,
     String password, {
@@ -70,9 +69,9 @@ class AuthApi {
     return session.name;
   }
 
-  /// Verify a supervisor approval PIN (`POST /pos/approvals/verify-pin`, rate-limited).
-  /// Returns the matching supervisor's name on success, or null if the PIN is invalid.
-  /// Used for in-place (approve-in-place) authorization of cashier actions over a threshold.
+  /// Verify a supervisor approval PIN (`POST /pos/approvals/verify-pin`, rate-limited)
+  /// for in-place authorization of cashier actions over a threshold. Returns the
+  /// supervisor's name, or null if the PIN is invalid.
   Future<String?> verifySupervisorPin(String pin) async {
     try {
       final data = await _client.post(

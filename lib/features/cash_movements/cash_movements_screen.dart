@@ -204,8 +204,7 @@ class CashMovementsScreen extends ConsumerWidget {
                           var approvedBy = '';
                           if (type == CashMovementType.operationalExpense &&
                               amount > plafon) {
-                            // Layar ini supervisor-only → supervisor menyetujui otomatis;
-                            // PIN hanya diperlukan bila (mis.) admin membuka via konteks lain.
+                            // Layar supervisor-only → menyetujui otomatis; PIN hanya bila dibuka via konteks lain.
                             if (appState.isSupervisor) {
                               approvedBy = appState.cashierName;
                             } else {
@@ -221,7 +220,8 @@ class CashMovementsScreen extends ConsumerWidget {
                               if (approver == null) {
                                 return;
                               }
-                              approvedBy = approver;
+                              // Backend cashmovement sudah supervisor-gated; PIN hanya untuk audit nama, tak perlu dikirim.
+                              approvedBy = approver.name;
                             }
                           }
                           final error = await controller.addCashMovement(
@@ -249,9 +249,7 @@ class CashMovementsScreen extends ConsumerWidget {
         );
       },
     );
-    // Controllers are intentionally not disposed here: doing so right after the
-    // dialog is popped races its exit animation (use-after-dispose). They are
-    // short-lived and garbage-collected once the closure goes out of scope.
+    // Controllers intentionally not disposed: would race the dialog's exit animation (use-after-dispose); GC'd instead.
   }
 }
 

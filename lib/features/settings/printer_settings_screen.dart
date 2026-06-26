@@ -50,7 +50,7 @@ class PrinterSettingsScreen extends ConsumerWidget {
                       ),
                       ButtonSegment(
                         value: PrintMode.bluetooth,
-                        label: Text('Thermal Bluetooth'),
+                        label: Text('Printer Bluetooth'),
                         icon: Icon(Icons.bluetooth_rounded),
                       ),
                     ],
@@ -88,7 +88,7 @@ class PrinterSettingsScreen extends ConsumerWidget {
                         FilledButton.icon(
                           onPressed: () => run(
                             controller.testPrint,
-                            okMessage: 'Membuka dialog cetak…',
+                            okMessage: 'Membuka pilihan cetak…',
                           ),
                           icon: const Icon(Icons.print_rounded),
                           label: const Text('Cetak Struk Contoh'),
@@ -138,8 +138,8 @@ class PrinterSettingsScreen extends ConsumerWidget {
             ? const Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Tidak ada printer terpasang. Pasangkan printer di '
-                  'Pengaturan Bluetooth perangkat dulu, lalu coba lagi.',
+                  'Belum ada printer. Sambungkan printer lewat Bluetooth '
+                  'perangkat dulu, lalu coba lagi.',
                 ),
               )
             : ListView(
@@ -147,7 +147,7 @@ class PrinterSettingsScreen extends ConsumerWidget {
                 children: [
                   const Padding(
                     padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Text('Pilih printer thermal'),
+                    child: Text('Pilih printer'),
                   ),
                   for (final device in devices)
                     ListTile(
@@ -192,7 +192,7 @@ class _BluetoothCard extends ConsumerWidget {
     final controller = ref.read(appControllerProvider.notifier);
     return SectionCard(
       title: 'Printer Bluetooth',
-      subtitle: 'Pasangkan printer di Pengaturan Bluetooth perangkat dulu, '
+      subtitle: 'Sambungkan printer lewat Bluetooth perangkat dulu, '
           'lalu pilih di sini.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

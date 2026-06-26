@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../models/pos_models.dart';
 import '../../shared/widgets/app_widgets.dart';
+import '../../shared/widgets/supervisor_approval_dialog.dart';
 import '../app_controller.dart';
 
 class TransactionsScreen extends ConsumerWidget {
@@ -202,9 +203,58 @@ class _TransactionDetail extends ConsumerWidget {
 
   final SaleTransaction transaction;
 
+  // Void: konfirmasi → kasir wajib PIN supervisor → panggil controller.
+  Future<void> _void(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Batalkan ${transaction.code}?'),
+        content: const Text(
+          'Stok item dikembalikan dan transaksi dikeluarkan dari rekap shift. '
+          'Tindakan ini tidak bisa dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ya, batalkan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    var pin = '';
+    if (!ref.read(appControllerProvider).isSupervisor) {
+      final approval = await showSupervisorApprovalDialog(
+        context,
+        title: 'Persetujuan Pembatalan',
+        message:
+            'Pembatalan transaksi ${transaction.code} memerlukan PIN supervisor.',
+      );
+      if (approval == null) return;
+      pin = approval.pin;
+    }
+    if (!context.mounted) return;
+    final error = await ref
+        .read(appControllerProvider.notifier)
+        .voidTransaction(transaction, supervisorPin: pin);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error ?? 'Transaksi dibatalkan')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(appControllerProvider.notifier);
+    final canVoid =
+        transaction.status == TransactionStatus.paid &&
+        transaction.paymentMethod == PaymentMethod.cash;
     return SectionCard(
       title: transaction.code,
       subtitle: formatDateTime(transaction.createdAt),
@@ -320,6 +370,21 @@ class _TransactionDetail extends ConsumerWidget {
               ),
             ],
           ),
+          if (canVoid) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _void(context, ref),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.destructive,
+                  side: const BorderSide(color: AppColors.destructive),
+                ),
+                icon: const Icon(Icons.block_rounded),
+                label: const Text('Batalkan Transaksi'),
+              ),
+            ),
+          ],
         ],
       ),
     );

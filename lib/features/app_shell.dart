@@ -45,7 +45,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
-    // Refresh flag fitur saat app kembali ke depan (soft-poll, bukan stream — anti flag basi).
+    // Soft-poll flag fitur saat app kembali ke depan (anti flag basi).
     if (lifecycle == AppLifecycleState.resumed) {
       ref.read(appControllerProvider.notifier).refreshConfig();
     }
@@ -136,7 +136,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       case AppScreen.transactions:
         return 'Cari transaksi, lihat detail, dan cetak ulang struk.';
       case AppScreen.incomingOrders:
-        return 'Pesanan self-order dari QR meja yang menunggu diproses.';
+        return 'Pesanan dari QR meja yang menunggu diproses.';
       case AppScreen.shiftSummary:
         return 'Penjualan shift, perkiraan kas, dan selisih.';
       case AppScreen.closeShift:
