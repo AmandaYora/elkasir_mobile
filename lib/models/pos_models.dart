@@ -48,7 +48,7 @@ extension OrderSourceLabel on OrderSource {
       case OrderSource.cashier:
         return 'Kasir';
       case OrderSource.selfOrder:
-        return 'Self-order (QR Meja)';
+        return 'Pesan Mandiri';
     }
   }
 }
@@ -57,7 +57,7 @@ extension SelfOrderStatusLabel on SelfOrderStatus {
   String get label {
     switch (this) {
       case SelfOrderStatus.placed:
-        return 'Baru';
+        return 'Masuk';
       case SelfOrderStatus.preparing:
         return 'Disiapkan';
       case SelfOrderStatus.completed:

@@ -9,21 +9,11 @@ class AppLogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Image.asset(
+      'assets/images/elkasir-transparent.png',
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(size * 0.24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.18),
-            offset: const Offset(0, 8),
-            blurRadius: 18,
-          ),
-        ],
-      ),
-      child: Icon(Icons.store_rounded, color: Colors.white, size: size * 0.48),
+      filterQuality: FilterQuality.medium,
     );
   }
 }

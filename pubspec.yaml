@@ -71,14 +71,17 @@ dev_dependencies:
   # Run: dart run flutter_launcher_icons
   flutter_launcher_icons: ^0.14.1
 
-# App launcher icon (logo). elkasir.png is a finished full-bleed icon (1254x1254),
-# so it's used as the legacy bitmap icon (masked by the launcher on Android 12+).
+# App launcher icon from the transparent-corner master (elkasir-transparent.png):
+# a legacy bitmap PLUS an Android adaptive icon — foreground art over a brand-teal
+# background — so Android 12+ masks it cleanly with no black corners.
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/images/elkasir.png"
+  image_path: "assets/images/elkasir-transparent.png"
   min_sdk_android: 21
   remove_alpha_ios: false
+  adaptive_icon_background: "#035866"
+  adaptive_icon_foreground: "assets/images/elkasir-transparent.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -90,6 +93,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/images/elkasir-transparent.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
